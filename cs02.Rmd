@@ -1,0 +1,710 @@
+---
+title: "CS02 - Vaping Behaviors in American Youth"
+author: "Arturo Torres Jimenez, Natalie Chiang, Sebastian Algharaballi-Yanow"
+output: html_document
+---
+
+## Introduction
+
+We have created this document to bring you along with us on our journey through the case study presented to us in our COGS 137 course during the winter quarter of the 2022 - 2023 school year. 
+
+Throughout this file we explore a case study created by the CDC to explore the tobacco use trends among middle-school and high-school students in the United States. We wrangle data extracted from Excel codebooks provided by the aforementioned CDC case study to create a more informative and useful dataset in order to answer four questions we will exhaustively answer below. Finally, we will be extrapolating our knowledge in a meaningful way that will hopefully leave the reader with answered questions differnet from the ones they began with at this point. Without further ado, we begin below:
+
+## Questions
+
+These are the questions that we will be answering throughout the case study, in addition to a brief description of each question for the purpose of clarity.
+
+1. How has tobacco and e-cigarette/vaping use by American youths changed since 2015?
+    - The first research question aims to explore any changes between tobacco/e-cigarette use in American teenagers since 2015. We'll be analyzing for any trends and relational instances that would define a clear change in the use of these particular drugs over a span from 2015-2019.
+
+2. How does e-cigarette use compare between males and females?
+    - Since our data includes instances of both male and female vape users, we'll be able to compare and contrast the trends seen in both genders and determine whether or not gender plays a role in tobacco/vape-related tendencies from 2015-2019.
+    
+3. What vaping brands and flavors appear to be used the most frequently?
+   - In addition to analyzing basic trends from 2015 and differences between the use of these drugs across both genders, we'll also be able to answer this question regarding the most popular vaping brands and flavors throughout this time period. Analyzing the results related to this question will give us a solid idea whether teenagers are gravitating towards one specific brand or flavor in order to satisfy a vape fix. 
+
+4. Is there a relationship between e-cigarette/vaping use and other tobacco use?
+   - Due to the fact that there are _many_ forms of tobacco/nicotine that teenagers have access to, we want to analyze any potential relationships between e-cigarette use and other tobacco products. This will give us insight regarding teenagers' preferences when it comes to using a product as a source of tobacco, and the general popularity of vapes in the nicotine/tobacco world. 
+
+5. Is there a difference in e-cigarette use between students living in different PSU (primary sampling units)?
+   - We wanted to analyze the amount of unique data in the Primary Sampling Unit (PSU), which is the county of the respondent students’ school. We care about this due to the differing circumstances that students of each PSU live with. We observed that sex breakdown of PSUs was comparable between males and females. We also found that e-cigarette and tobacco use between PSUs was not significantly different. We can infer that each PSU was relatively comparable to observe other variables. 
+
+## The Data
+
+The dataset we will be using comes from an annual non-longitudinal case study the CDC has conducted on the tobacco habits of high school and middle school students in the United States (US). The complete dataset spans from the year 1999 to the year 2022. The scope of our project is based on a subset of this data from 2015 to 2019. Though the data is limited, the CDC does an excellent job of disclosing its shortcomings. The variables (columns) are explained in the provided codebooks (dataset by year) we must collect and clean. However, much like this paraphrased description of the data, we can collect the data needed from Professor Shannon Ellis' COGS 137 Lecture Notes, more specifically Lecture Notes "15-cs02-data" (https://cogs137.github.io/website/content/lectures/15-cs02-data.html).
+
+Below is where the data used in this study can be found:
+
+https://www.cdc.gov/tobacco/data_statistics/surveys/nyts/data/
+
+### Load packages
+
+```{r,warning=FALSE, message=FALSE}
+library(purrr) #used for ease of import of excel and csv files
+library(tidyverse) #used for basically everything
+library(dplyr) #used for the manipulation of subsets of the nyts_data for precise plots
+library(forcats) #used for the reordering of factors in our plots
+library(viridis) #used for consistent custom color palettes for those differently-abled (colorblind)
+```
+
+
+```{r,eval=FALSE}
+# only have to run this once 
+OCSdata::load_simpler_import("ocs-bp-vaping-case-study", outpath = getwd())
+```
+
+## Data Wrangling
+
+Before we are able to investigate and answer our questions above, we must start with data wrangling. Having good, tidy data is an essential part to accurately responding to the research questions brought forth in our case study. All of the code below was taken from the Professor Shannon Ellis' COGS 137 Lecture Notes, more specifically Lecture Notes "15-cs02-data" (https://cogs137.github.io/website/content/lectures/15-cs02-data.html).
+
+To begin, we will read in our CSV data files, and get our variable names from the list of files that were given to us prior to the study. Our data files are currently separated by year (2015-2019). Our end goal is combining all of these data frames into one dataset containing the vape-related information we'll need to carry out the study. Before we do any of that, we need to ensure that our variable names are the same for each separated data frame to ensure the merging process is painless. We'll begin that process after importing the data below. 
+
+```{r,eval=FALSE}
+# read in CSVs
+nyts_data <- list.files("data/simpler_import/", 
+                        pattern = "*.csv", 
+                        full.names = TRUE) |>
+  map(~ read_csv(.))
+
+# get names
+nyts_data_names <- list.files("data/simpler_import/",
+                              pattern = "*.csv") |>
+  str_extract("nyts201[5-9]")
+
+# apply names
+names(nyts_data) <- nyts_data_names
+```
+
+### Data Cleaning (Variable Names)
+
+Now that we have our variable names imported, we'll begin to rename each column name to match a much tidier structure that we prefer. It would be very hard to work with variable names like "Qn1", "Qn2", and "Qn3", so we rename those to "Age", "Sex", and "Grade" below.
+
+```{r,eval=FALSE}
+# 2015
+nyts_data[["nyts2015"]] <- nyts_data[["nyts2015"]] |>
+  rename(Age = Qn1,
+         Sex = Qn2,
+         Grade = Qn3)
+```
+
+To make this process easier for the rest of our data frames, we define a function that renames the current variable names to names of our liking for the rest of our separated data. Essentially, we are defining new variable names corresponding to the age, sex, and grade of an e-cigarette user present in our data, to go along with the different vape flavors we'll be analyzing later in the case study.
+
+```{r,eval=FALSE}
+# Function for cleaning the remaining years
+update_survey <- function(dataset) { 
+  dataset |>
+    rename(Age = Q1,
+           Sex = Q2,
+           Grade = Q3,
+           menthol = Q50A,
+           clove_spice = Q50B,
+           fruit = Q50C,
+           chocolate = Q50D,
+           alcoholic_drink = Q50E,
+           candy_dessert_sweets = Q50F,
+           other = Q50G)
+}
+```
+
+Here, we apply the user-defined function to the rest of our separated data frames that need column name cleaning.
+
+```{r,eval=FALSE}
+# 2016-2018
+nyts_data <- nyts_data |> 
+  map_at(c("nyts2016", "nyts2017", "nyts2018"), update_survey)
+```
+
+The 2019 data frame was slightly different than the others in terms of previous column naming (such as menthol being previously defined as Q62A instead of Q50A). 2019 also contains the brand of e-cigarette that corresponds with each user, unlike our previous data frames. Therefore, we cannot use our predefined function when cleaning this data set, but the cleaning steps remain very similar as before (primarily using the `raname()` function). After renaming the columns to our liking, we replaced any values that were equal to ".N", ".S", ".Z", ".M", or "M" with NA (missing values), as these were values in the 2019 data frame that were associated with being invalid and/or missing. We also used the `mutate_at` function to convert columns that started with "E", "C" to numeric values, along with all columns from "menthol" to "other". This will make eventual computation that requires numeric column types much easier to produce.
+
+```{r,eval=FALSE}
+# 2019
+nyts_data[["nyts2019"]] <- nyts_data[["nyts2019"]] |>
+  rename(brand_ecig = Q40,
+         Age = Q1,
+         Sex = Q2,
+         Grade = Q3,
+         menthol = Q62A,
+         clove_spice = Q62B,
+         fruit = Q62C,
+         chocolate = Q62D,
+         alcoholic_drink = Q62E,
+         candy_dessert_sweets = Q62F,
+         other = Q62G) |>
+  mutate_all(~ replace(., . %in% c(".N", ".S", ".Z", ".M", "M"), NA)) |>
+  mutate_at(vars(starts_with("E", ignore.case = FALSE),
+                 starts_with("C", ignore.case = FALSE),
+                 menthol:other), 
+            list( ~ as.numeric(.)))
+```
+
+Now we can move on to cleaning variable values!
+
+### Data Cleaning (Variable Values)
+
+Similar to above, we create a user-defined function to make this process a lot easier. As overall summary of the function is as follows:
+
+1. We use `mutate_all(~ replace(., . %in% c("*", "**"), NA))` to replace all values in the dataset that match `*` or `**` with `NA.`
+
+2. We use `mutate(Age = as.numeric(Age) + 8, Grade = as.numeric(Grade) + 5)` to convert the Age and Grade variables to numeric data types and then add 8 and 5 to their respective values.
+
+3. We apply `mutate(Age = as.factor(Age)`, `Grade = as.factor(Grade)`, and `Sex = as.factor(Sex))` in order to convert the Age, Grade, and Sex variables to factor data types.
+
+4. We utilize `mutate(Sex = case_match(Sex, "1" ~ "male", "2" ~ "female"))` to replace the Sex variable values of 1 and 2 with the strings "male" and "female", respectively, using the `case_match()` function.
+
+5. `mutate(Age = case_match(Age, "19" ~ ">18", .default = Age), Grade = case_match(Grade, "13" ~ "Ungraded/Other", .default = Grade))` is used, along with `case_match()` to replace the `Age` variable value of "19" with the string ">18", and the Grade variable value of "13" with the string "Ungraded/Other."
+
+6. Finally, `mutate_at(vars(starts_with("E", ignore.case = FALSE), starts_with("C", ignore.case = FALSE)), list( ~ case_match(., 1 ~ TRUE, 2 ~ FALSE, .default = NA)))` is applied to the `case_match()` function to all variables in the dataset that start with the letter "E" or "C" (ignoring case sensitivity). This part of the wrangling replaces the values of "1" and "2" with `TRUE` and `FALSE`, respectively, and all other values with `NA`.
+
+```{r,eval=FALSE}
+# Function
+update_values <- function(dataset){
+  dataset |>
+    mutate_all(~ replace(., . %in% c("*", "**"), NA)) |>
+    mutate(Age = as.numeric(Age) + 8,
+           Grade = as.numeric(Grade) + 5) |>
+    mutate(Age = as.factor(Age),
+           Grade = as.factor(Grade),
+           Sex = as.factor(Sex)) |>
+    mutate(Sex = case_match(Sex,
+                            "1" ~ "male",
+                            "2" ~ "female")) |>
+    mutate_all(~ replace(., . %in% c("*", "**"), NA)) |>
+    mutate(Age = case_match(Age, "19" ~ ">18", 
+                            .default = Age),
+           Grade = case_match(Grade,
+                              "13" ~ "Ungraded/Other",
+                              .default = Grade)) |>
+    mutate_at(vars(starts_with("E", ignore.case = FALSE),
+                   starts_with("C", ignore.case = FALSE)
+    ), list( ~ case_match(., 1 ~ TRUE,
+                             2  ~ FALSE,
+                          .default = NA)))
+}
+```
+
+We can now apply this function to our NYTS data frame in order to update our data values all in one step. Then, in order to count how many males are in our dataset, we create a `count_sex()` function that takes a dataset as an input, filters the dataset to include only rows where `Sex` equals "male", counts the number of rows with the `count()` function, and extracts the result with the `pull()` function.
+
+```{r,eval=FALSE}
+# Apply Function
+nyts_data <- map(nyts_data, update_values)
+
+# function to count how many males
+count_sex <- function(dataset){dataset |> 
+    filter(Sex=='male') |> 
+    count(Sex) |> 
+    pull(n)}
+```
+
+Our `count_sex` function is then applied to a subset of the `nyts_data` dataset that corresponds to the "nyts2019" element. The subset is first transformed using the `mutate` function to convert the `psu` column to a character variable and to replace the values in the `brand_ecig` column with strings based on their numeric codes using the `case_match` function.
+
+```{r,eval=FALSE}
+# Apply from 2019-specific
+nyts_data[["nyts2019"]] <- nyts_data[["nyts2019"]]  |>
+  mutate(psu = as.character(psu)) |>
+  mutate(brand_ecig = case_match(brand_ecig,
+                             "1" ~ "Other", # levels 1,8 combined to `Other`
+                             "2" ~ "Blu",
+                             "3" ~ "JUUL",
+                             "4" ~ "Logic",
+                             "5" ~ "MarkTen",
+                             "6" ~ "NJOY",
+                             "7" ~ "Vuse",
+                             "8" ~ "Other"))
+```
+
+### Flavor Data (2016-2019)
+
+Next, we need to wrangle our data regarding the different vape flavors across each year in our dataset. This is produced in an effort to separate "true" and "false" values in our flavors columns, meaning that missing values will be set to `FALSE` and `TRUE` values will represent those who reported using a specific flavor out of all users (rather than those that used a specific flavor compared to those who used a different flavor). In order to do this, we define a function called `update_flavors` and apply it to a subset of `nyts_data.` The `update_flavors` function takes in a dataset as its argument and does the following transformations on it:
+
+1. It selects the columns from `menthol` to `other` using the `vars` function.
+2. It changes the values in the selected columns to `TRUE` if they are equal to `1`, and to `FALSE` if they are `NA`, using the `case_match` function and the `mutate_at` function.
+
+The `map_at` function is then used to apply the `update_flavors` function to all the columns in `nyts_data` except for the `nyts2015` column (since 2015 did not have any flavor data). After application, the `map_at` function returns a modified dataset with those columns updated.
+
+```{r,eval=FALSE}
+update_flavors <- function(dataset){
+  dataset |>
+    mutate_at(vars(menthol:other),
+              list(~ case_match(.,
+                            1 ~ TRUE,
+                            NA ~ FALSE))) }
+
+nyts_data  <- nyts_data  |> 
+  map_at(vars(-nyts2015), update_flavors)
+```
+
+### Combine Data
+
+Now, we can finally combine all of the wrangled data into a single, tidy data frame. The steps below combine all the wrangled elements in `nyts_data` into a single data frame with an additional "year" column indicating the year of each element. The "year" column is created by extracting the year information from the original element names and converting it to numeric format.  
+
+1. The first operation is using the `map_df` function to map each element of `nyts_data` into a data frame and then bind them into a single data frame using `bind_rows.` The `.id = "year"` argument specifies that the original list element names should be added as a new column called "year" in the output data frame.
+
+2. The second operation is using the `mutate` function to add a new column called "year" to the resulting data frame. The `str_remove` function is used to remove the "nyts" string from the year column (extracted from the .id argument in the previous operation), and the `as.numeric` function is used to convert the resulting character values to numeric.
+
+```{r,eval=FALSE}
+nyts_data <- nyts_data |>
+  map_df(bind_rows, .id = "year") |>
+  mutate(year = as.numeric(str_remove(year, "nyts")))
+```
+
+### Clean up columns: tobacco
+
+Our next step is to clean up our "tobacco" columns. With this code, we achieve the computation of two new variables indicating whether each respondent has ever used tobacco or is currently using tobacco, based on the presence of any non-missing values in the columns starting with "E" and "C", respectively. The steps to this output are as follows:
+
+1. The first operation is using the mutate function to add two new columns to `nyts_data` called "tobacco_sum_ever" and "tobacco_sum_current". These columns are computed by applying the `rowSums` function to a subset of the data frame created by selecting columns that start with "E" and "C", respectively. The `na.rm = TRUE` argument specifies that missing values should be ignored when computing the row sums.
+
+2. The second operation is using the `mutate` function to add two additional columns to `nyts_data` called "tobacco_ever" and "tobacco_current". These columns are computed using the `case_when` function. If the value in the "tobacco_sum_ever" column is greater than 0, the value in the "tobacco_ever" column is set to `TRUE`, otherwise it is set to `FALSE`. Similarly, if the value in the "tobacco_sum_current" column is greater than 0, the value in the "tobacco_current" column is set to `TRUE`, otherwise it is set to `FALSE`.
+
+```{r,eval=FALSE}
+nyts_data <- nyts_data |>
+  mutate(tobacco_sum_ever = rowSums(select(., starts_with("E", 
+                                    ignore.case = FALSE)), na.rm = TRUE),
+         tobacco_sum_current = rowSums(select(., starts_with("C", 
+                                    ignore.case = FALSE)), na.rm = TRUE))  |>
+  mutate(tobacco_ever = case_when(tobacco_sum_ever > 0 ~ TRUE,
+                                  tobacco_sum_ever == 0 ~ FALSE),
+         tobacco_current = case_when(tobacco_sum_current > 0 ~ TRUE,
+                                     tobacco_sum_current == 0 ~ FALSE))
+```
+
+### Clean up columns: e-cig/vaping vs others
+
+Now we can turn to cleaning up the columns that specify the current use of e-cigarettes and non-e-cigarette products. The code below creates four new variables in the `nyts_data` dataset based on the sum of different columns that contain information about ever and current use of those products.
+
+The `rowSums()` function is used to sum the values in the columns, and the `na.rm` argument is set to `TRUE` to remove missing values. The `select()` function is used to choose the relevant columns to be summed based on their names, which start with "E" or "C" and ignore case sensitivity. In the case of `ecig_sum_ever` and `ecig_sum_current`, the `EELCIGT` and `CELCIGT` columns are used, respectively, to calculate the sum of ecig use.
+
+Finally, the `case_when()` function is used to create binary variables indicating whether a respondent ever or currently uses ecigs or non-ecig tobacco products. The output of this code is a modified `nyts_data` dataset with these new variables added.
+
+```{r,eval=FALSE}
+nyts_data <- nyts_data |>
+  mutate(ecig_sum_ever = rowSums(select(., EELCIGT), na.rm = TRUE),
+         ecig_sum_current = rowSums(select(., CELCIGT), na.rm = TRUE),
+         non_ecig_sum_ever = rowSums(select(., starts_with("E",  ignore.case = FALSE), 
+                                            -EELCIGT), na.rm = TRUE),
+         non_ecig_sum_current = rowSums(select(., starts_with("C", ignore.case = FALSE), 
+                                               -CELCIGT), na.rm = TRUE)) |>
+  mutate(ecig_ever = case_when(ecig_sum_ever > 0 ~ TRUE,
+                               ecig_sum_ever == 0 ~ FALSE),
+         ecig_current = case_when(ecig_sum_current > 0 ~ TRUE,
+                                  ecig_sum_current == 0 ~ FALSE),
+         non_ecig_ever = case_when(non_ecig_sum_ever > 0 ~ TRUE,
+                                   non_ecig_sum_ever == 0 ~ FALSE),
+         non_ecig_current = case_when(non_ecig_sum_current > 0 ~ TRUE,
+                                      non_ecig_sum_current == 0 ~ FALSE))
+```
+
+### Specify use group
+
+Moving on to one of our final wrangling steps, we add columns to `nyts_data` indicating whether a participant ever or currently used e-cigarettes only, non-e-cigarette tobacco products only, a combination of products, or neither. Our code does this by first calculating sums of ever-use and current-use of e-cigarettes and non-e-cigarette products separately, and then uses those sums to determine the appropriate classification for each participant. The results are stored in a new column called Group, which is then added to `nyts_data` with the `mutate` function. Our code makes excellent use of the `case_when` function to handle the many different classification areas of the data.
+
+```{r,eval=FALSE}
+nyts_data <- nyts_data |>
+             mutate(ecig_only_ever = case_when(ecig_ever == TRUE &
+                                           non_ecig_ever == FALSE &
+                                            ecig_current == FALSE &
+                                        non_ecig_current == FALSE ~ TRUE,
+                                                            TRUE ~ FALSE),
+              ecig_only_current = case_when(ecig_current == TRUE &
+                                           non_ecig_ever == FALSE &
+                                        non_ecig_current == FALSE ~ TRUE,
+                                                            TRUE ~ FALSE),
+            non_ecig_only_ever = case_when(non_ecig_ever == TRUE &
+                                               ecig_ever == FALSE &
+                                            ecig_current == FALSE &
+                                        non_ecig_current == FALSE ~ TRUE,
+                                                            TRUE ~ FALSE),
+      non_ecig_only_current = case_when(non_ecig_current == TRUE &
+                                               ecig_ever == FALSE &
+                                            ecig_current == FALSE ~ TRUE,
+                                                            TRUE ~ FALSE),
+                        no_use = case_when(non_ecig_ever == FALSE &
+                                               ecig_ever == FALSE &
+                                            ecig_current == FALSE &
+                                        non_ecig_current == FALSE ~ TRUE,
+                                                            TRUE ~ FALSE)) |>
+                 mutate(Group = case_when(ecig_only_ever == TRUE |
+                                       ecig_only_current == TRUE ~ "Only e-cigarettes",
+                                      non_ecig_only_ever == TRUE |
+                                   non_ecig_only_current == TRUE ~ "Only other products",
+                                                  no_use == TRUE ~ "Neither",
+                                          ecig_only_ever == FALSE &
+                                       ecig_only_current == FALSE &
+                                      non_ecig_only_ever == FALSE &
+                                   non_ecig_only_current == FALSE &
+                                                  no_use == FALSE ~ "Combination of products"))
+```
+
+### Add yearly survey totals
+
+Finally, we can add the total values from the each corresponding NYTS survey year for each of the wrangled columns currently present in our dataset.
+
+```{r,eval=FALSE}
+nyts_data <- nyts_data |> 
+  add_count(year)
+```
+
+### Save Data
+
+Our wrangling is complete! We can store the final data frame into an accessible `.rda` file to ensure not having to run through the entire wrangling process each time we open our `.Rmd` file.
+
+```{r,eval=FALSE}
+save(nyts_data, file="data/wrangled_data_vaping.rda")
+```
+
+Now that our data is wrangled, tidy, and saved, we can move on to performing exploratory data analysis in an effort to strongly answer the aforementioned Case Study questions.
+
+## Exploratory Data Analysis + Results
+
+### Question 1: How has tobacco and e-cigarette/vaping use by American youths changed since 2015?
+
+In order to discuss vaping brands and flavors that frequently appear in our data, we must perform a series of EDA to gather more information about the data and achieve new insights that will allow us to answer this question.
+
+
+Below, we created a stacked area chart that shows the total usage of different tobacco products and flavors grouped by sex. Each area will represent the usage of a specific product or flavor, and the color of the area will indicate the type of product or flavor. You can see how the usage of different products and flavors changes over the years, and how they compare between different sexes.
+
+Here is a brief summary of the steps in our code:
+
+1. Filter the data to include only the relevant columns and years using the `select` function.
+
+2. Reshape the data from wide to long format using the `pivot_longer` function from the `tidyr` package, with `names_to` and `values_to` arguments to specify the names of the columns for the variables and values.
+
+3. Group the data by year, product, and sex using the `group_by` function from the `dplyr` package, and calculate the sum of the values using the `summarise` function.
+
+4. Create a stacked area chart using `ggplot2`, with `geom_area` to create the area chart, `facet_grid` to split the chart by sex, and `scale_fill_manual` to specify custom colors for each product.
+
+5. Add titles and formatting using `labs`, `theme`, and other `ggplot2` functions.
+
+```{r}
+load("data/wrangled_data_vaping.rda")
+```
+
+
+```{r,warning=FALSE, message=FALSE}
+# Filter the data to include only the relevant columns and years
+nyts_data_filtered <- nyts_data |>
+  select(year, Age, Sex, Grade, ECIGT, ECIGAR, ESLT, EELCIGT, EROLLCIGTS, EFLAVCIGTS, EBIDIS, EFLAVCIGAR, EHOOKAH, EPIPE, ESNUS, EDISSOLV, CCIGT, CCIGAR, CSLT, CELCIGT, CROLLCIGTS, CFLAVCIGTS, CBIDIS, CHOOKAH, CPIPE, CSNUS, CDISSOLV, menthol, clove_spice, fruit, chocolate, alcoholic_drink, candy_dessert_sweets, other)
+
+# Reshape the data to a long format for ggplot2
+nyts_data_long <- nyts_data_filtered |>
+  pivot_longer(-c(year, Age, Sex, Grade), names_to = "Product", values_to = "Value")
+
+# Group the data by year, product, and sex. Remove data points with Sex as "NA"
+nyts_data_grouped <- nyts_data_long |>
+  group_by(year, Product, Sex) |>
+  summarise(Value = sum(Value)) |>
+  drop_na(Sex)
+
+# Create the stacked area chart
+ggplot(nyts_data_grouped, aes(x = year, y = Value, fill = Product)) +
+  geom_area() +
+  facet_grid(rows = vars(Sex)) +
+  scale_fill_manual(values = c("#1F77B4", "#AEC7E8", "#FF7F0E", "#FFBB78", "#2CA02C", "#98DF8A", "#D62728", "#FF9896", "#9467BD", "#C5B0D5", "#8C564B", "#C49C94", "#E377C2", "#F7B6D2", "#7F7F7F", "#C7C7C7", "#BCBD22", "#DBDB8D", "#17BECF", "#9EDAE5", "#1B1B1B")) +
+  labs(x = "Year", y = "Total Usage", fill = "Product", title = "Total Usage of Tobacco Products and Flavors (2016-2019)") +
+  theme_classic() +
+  theme(plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+        axis.text = element_text(size = 12),
+        axis.title = element_text(size = 14, face = "bold"),
+        legend.position = "right",
+        legend.title = element_text(size = 12, face = "bold"),
+        legend.text = element_text(size = 10))
+
+```
+
+One thing we immediately noticed was that the year of `2015` was missing from the visualization. Upon further investigation, this makes complete sense, being that the `Value` (Total Usage) for tobacco products between both genders in 2015 are all missing from our original dataset!
+
+```{r}
+nyts_data_grouped |>
+  filter(year == 2015)
+```
+
+In regards to interpreting this visual, it is clear that both female and male tobacco users are following very similar trends in overall tobacco usage from 2016 to 2019. This is very interesting, as we now know that there isn't a large discrepancy between genders when considering popular tobacco products and flavors. We also notice that there is a _large_ increase in tobacco usage from 2017-2018, and an overall increase from 2016. This increase is seen across ALL products, therefore we now understand that not one specific tobacco product is being used more over the years; it is all of them.
+
+Therefore, when analyzing for any changes within tobacco and e-cigarette/vaping use by American youths since 2015, we can confidently say that 2016 to 2017 saw a slight decrease in overall use, followed by a massive surge from 2017 to 2018, along with a steady usage from 2018 to 2019. **Since 2015, it can be clearly seen that teenagers are using more tobacco products than ever before.**
+
+### Question 2: How does e-cigarette use compare between males and females?
+
+Though we could have created this graph by only utilizing the data from the `EELCIGT` variable, we decided to create a more comprehensive visual by also utilizing the `CELCIGT` variable to show both the trend of continuous users (defined as having used tobacco products within 30 days of the survey) and users that may have ever tried any tobacco product. To create the plot below in order to answer this question, utilize the following instructions:
+
+1. Create a variable `v_colors` that will select the first and fourth colors of the 6th color palette of the `viridis` library.
+2. Then we proceed to call the `nyts_data` dataset and filter by all that are not `NA` under the `Sex` column. Then we will proceed to group them (using the `group_by()` function) by the two columns `year` and `Sex`. 
+3. We proceed by calling the `Summarize()` function to morph the data into percentages from the raw numbers in the appropriate categories.
+4. For ease of use we will take our output from the `Summarize()` function to then call the `pivot_longer()` function to convert that output into the long format. 
+5. We then proceed to crate a visualization utilizing the long format data, applying the appropriate fields inside of the `aes()` function of the `ggplot()` function.
+6. To further our plot, we apply the `geom_line()`,`geom_point()`,`scale_linetype_manual()`, and `scale_color_manual()` functions to form the shape of the lines running through the plotted data points we created in the previous steps and to style the created lines in both the shape (solid vs dashed) and the colors previously selected from the viridis library in step 1.  
+7. We then use the `theme_linedraw()` function of the `ggplot2` library to create a simple black and white background for our plot.
+8. We use the `theme()` function to manually establish the theme below, as we deleted the previous legend in the `geom_point()` function, and to properly space them.
+9. We finalize our visualization by giving it appropriate titles and axis.
+
+```{r, warning=FALSE, message=FALSE}
+v_colors =  viridis(6)[c(1, 4)]
+nyts_data |>
+  filter(!is.na(Sex)) |>
+  group_by(year, Sex) |>
+  summarize("Ever \n (any lifetime use)" = (mean(EELCIGT, na.rm = TRUE) * 100),
+            "Current \n (any past-30-day use)" = (mean(CELCIGT, na.rm = TRUE) * 100)) |>
+  pivot_longer(cols = "Ever \n (any lifetime use)":"Current \n (any past-30-day use)",
+               names_to = "User",
+               values_to = "Percentage of students") |>
+  ggplot(aes(x = year, y = `Percentage of students`, color = Sex)) +
+  geom_line(aes(linetype = User)) +
+  geom_point(show.legend = FALSE, size = 1) +
+  scale_linetype_manual(values = c(2, 1)) +
+  scale_color_manual(values = v_colors) +
+  theme_linedraw() +
+  theme(legend.position = "bottom",
+        plot.title.position = "plot",
+        axis.title.x = element_blank()) +
+  labs(title = "E-cigarette usage by sex",
+       subtitle = "Current users vs 'ever' users by sex",
+       y = "% of students")
+```
+
+From the visualization above, we can conclude that regardless of whether or not we are measuring by the standard of using tobacco over the past 30 days or "ever", **those that responded with 'Male' to the survey are more likely to be tobacco consumers.** This holds true across the trend of tobacco use decline (from 2015 to 2017) and tobacco use increase (from 2017 to 2019). Though this is only a representation of the tobacco using student population, we can use the trend lines to make broad strokes extrapolations to contextualize some of the plots below. Particularly, this plot contextualizes the relationship between vaping and the other forms of tobacco usage that we will explore in Question 4.
+
+### Question 3: What vaping brands and flavors appear to be used the most frequently?
+
+In order to visualize the most popular vaping flavors in our dataset, we wanted to create a clear bar plot that presents each flavor along with the total usage for that particular entity. As a reminder, there are lots of missing values in the data, so our visualization provides a rough _estimate_ of the most popular vaping flavors. Nevertheless, here is a brief summary of the code below:
+
+1. Renamed columns with spaces using the `rename()` function
+2. Filtered the data to include only rows from 2015 to 2019 using `filter()`
+3. Grouped the data by e-cigarette flavors using `group_by()` and calculated the total usage of each flavor using `summarise()`
+4. Reshaped the data from wide to long format using `pivot_longer()`
+5. Removed rows where the Flavor Used was 0 using `filter()`
+6. Created a bar plot using `ggplot()`, specifying the x, y, and fill aesthetics, as well as the color palette using `scale_fill_manual()`
+7. Added labels to the x and y axes, fill legend, and plot title using `labs()`
+8. Changed the theme to `theme_classic()` and customized the title and axis text using `theme()`. Removed the fill legend using `guides().`
+
+
+```{r,warning=FALSE, message=FALSE}
+# Rename columns
+nyts_data_renamed <- nyts_data |>
+  rename(`alcoholic drink` = alcoholic_drink,
+         sweets = candy_dessert_sweets,
+         `clove spice` = clove_spice)
+
+# Calculate the total usage of each e-cigarette flavor
+ecig_flavor_totals <- nyts_data_renamed |>
+  filter(year >= 2015 & year <= 2019) |>
+  group_by(menthol, `clove spice`, fruit, chocolate, `alcoholic drink`, sweets, other) |>
+  summarise(total_usage = sum(ECIGT, ECIGAR))
+
+# Reshape the data to a long format for ggplot2
+ecig_flavor_totals_long <- ecig_flavor_totals |>
+  pivot_longer(-total_usage, names_to = "Flavor", values_to = "Flavor Used") |>
+  filter(`Flavor Used` != 0)
+
+# Create the bar plot
+ggplot(ecig_flavor_totals_long, aes(x = Flavor, y = total_usage, fill = "Flavor Used")) +
+  geom_bar(stat = "identity") +
+  scale_fill_manual(values = c("#1F77B4", "#AEC7E8")) +
+  labs(x = "E-Cigarette Flavor", y = "Total Usage", fill = "Flavor Used", title = "NYTS: Most Common E-Cigarette Flavors (2015-2019)") +
+  theme_classic() +
+  theme(plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+        axis.text.x = element_text(angle = 0, vjust = 0.5, size = 10),
+        axis.text.y = element_text(size = 12),
+        axis.title = element_text(size = 14, face = "bold")) +
+  guides(fill=FALSE)
+
+```
+
+We can gather a lot from this visualization. First off, we can see that the sweets flavor is the most popular e-cigarette from 2015-2019, with alcoholic drinks being a close second. We can also see that teens gravitate towards sweet flavors like sweets, chocolate, fruit, and menthol as opposed to a flavor like clove spice. Maybe this means that teenagers view vaping as an alternative to satisfying a sweet tooth, something that all teenagers often struggle with. This could also be why some teenagers see vaping as super addicting. Not only are the chemical compounds found in vapes, like nicotine, are naturally addicting, but it can be hard to not use a product that tastes super sweet, almost like a dessert. This could explain why sweets and other sweet-like categories are seen so often in our data. Let's move on to the brands that appear most in our data.
+
+
+Below is a horizontal bar chart that features all of the vape brands present in our dataset. One thing to note is that 2019 was the only year where e-cigarette brands were documented in our data. Therefore, we can only generalize these findings to the year of 2019 and must consider the possibilities of other brands being more popular in previous years. A brief description of the code is as follows:
+
+1. Rename the column "brand_ecig" to "brand".
+2. Filter the data for rows where the year is between 2015 and 2019 (just in case there IS data from previous years), and select only the "brand" column.
+3. Remove any rows with missing values.
+4. Count the occurrences of each brand in the filtered data.
+5. Create a bar chart using ggplot to visualize the top 7 e-cigarette brands mentioned in the data from 2015 to 2019.
+6. Customize the plot with a title, x-axis label, y-axis label, and theme.
+
+
+```{r}
+# Rename brand_ecig column
+nyts_data_renamed <- nyts_data |>
+  rename(Brand = brand_ecig)
+
+# Filter for relevant columns and rows
+nyts_data_filtered <- nyts_data_renamed |>
+  filter(year >= 2015 & year <= 2019) |>
+  select(Brand) |>
+  drop_na()
+
+# Count occurrences of each brand
+brand_counts <- nyts_data_filtered |>
+  count(Brand, sort = TRUE)
+
+# Plot top 10 brands
+ggplot(head(brand_counts, 10), aes(x = reorder(Brand, n), y = n, fill = Brand)) +
+  geom_col() +
+  scale_fill_manual(values = rainbow(10)) +
+  coord_flip() +
+  labs(title = "Top 7 E-Cigarette Brands (2019)",
+       x = "Brand",
+       y = "Number of Mentions",
+       fill = "Brand") +
+  theme_classic() +
+  theme(plot.title.position = "plot")
+
+```
+
+We immediately see that the JUUL brand outlasts all of the others, by a wide margin, in terms of popularity. This makes sense, given that JUUL products are easily accessible in most smoke shops, and is the product that you hear about the most in the news. This visualization also revealed that a large chunk of vape brands teenagers are gravitating towards are categorized as "other" in our data. This makes us wonder what "other" vape brands are out there, and why so much of our brand data ends up as "other". While we're able to draw the conclusion that JUUL is the most popular brand, this visualization shows that we also need to consider that there could be other brands that compete with JUUL and are simply not listed in this dataset.
+
+All in all, we can concretely say that based on the current data we have access to, the vaping flavors that appear to be used most frequently are, in order of most to least popular, **candy/dessert/sweets, alcoholic drink, fruit, menthol, other, chocolate, and clove spice**. We can also accurately say that the vaping brands that are used most frequently in our data from 2019 are **JUUL, Other, Blu, Vuse, NJOY, Logic, and MarkTen**, once again in the order of most to least popular.
+
+### Question 4: Is there a relationship between e-cigarette/vaping use and other tobacco use?
+
+In order to begin analyzing particular trends between vaping and other tobacco products, we must create a visualization that clearly defines any relationships between our variables at hand. We decided to use a line plot for this, mainly due to line plots being _very_ helpful for modeling complex relationships over time.
+
+In this plot we see the general trend of current users of E-Cigarettes in comparison to the users of every other type of tobacco. To create the plot below, we utilized the following steps:
+
+1. Create a variable `v_colors` that will select the first and fourth colors of the 6th color palette of the `viridis` library.
+2. Then we proceed to call the `nyts_data` dataset and group the dataset (using the `group_by()` function) by the column `year`. 
+3. We proceed by calling the `Summarize()` function to morph the data into percentages from the raw numbers in the `ecig_current` and `non_ecig_current` categories.
+4. For ease of use we will take our output from the `Summarize()` function to then call the `pivot_longer()` function to convert that output into the long format. 
+5. We then proceed to crate a visualization utilizing the long format data, applying the appropriate fields inside of the `aes()` function of the `ggplot()` function.
+6. To further our plot, we apply the `geom_line()`,`geom_point()`,`scale_linetype_manual()`, and `scale_color_manual()` functions to form the shape of the lines running through the plotted data points we created in the previous steps and to style the created lines in both the shape (solid vs dashed) and the colors previously selected from the viridis library in step 1.  
+7. We then use the `theme_linedraw()` function of the `ggplot2` library to create a simple black and white background for our plot.
+8. We use the `theme()` function to manually establish the theme below, as we deleted the previous legend in the `geom_point` function, and to properly space them.
+9. We finalize our visualization by giving it appropriate titles and axis.
+
+```{r}
+v_colors =  viridis(6)[c(1, 4)]
+
+nyts_data |>
+  group_by(year) |>
+  summarize(
+    `e-cigarette_current` = (mean(ecig_current, na.rm = TRUE) * 100),
+    `non-e-cigarette_current` = (mean(non_ecig_current, na.rm = TRUE) * 100)
+  ) |>
+  pivot_longer(cols = -year,
+               names_to = "Category",
+               values_to = "Percentage of students") |>
+  separate(Category, into = c("Product", "User"), sep = "_") |>
+  ggplot(aes(x = year, y = `Percentage of students`, color = Product)) +
+  geom_line() +
+  geom_point(show.legend = FALSE, size = 2) +
+  scale_color_manual(values = v_colors) +
+  scale_linetype_manual(values = c(1)) +
+  scale_y_continuous(breaks = seq(0, 60, by = 10), limits = c(0, 60)) +
+  coord_cartesian(ylim = c(0, 20)) +
+  theme_linedraw() +
+  theme(legend.position = "bottom",
+        plot.title.position = "plot",
+        axis.title.x = element_blank()) +
+  labs(title = "Current e-cigarettes users vs. other tobacco product users over time",
+       y = "% of students",
+       subtitle = "E-cigarette products users become more prominent after 2017")
+```
+
+We are using the `ecig_current` and `non_ecig_current` columns as they are sums (of the boolean equation parsing through the types of tobacco originally present in the datasets prior to our clean up. The process is visible on this document from lines 114 to 144) of the type of tobacco used by the survey's respondents. This is a conservative estimate, as the current users (by definition being users that have consumed products within the past 30 days) will provide a more up to date and clear visualization. 
+
+Though, if another user wished to create a more comprehensive plot, we could utilize the code below. The user could then create their own plot as they would like. 
+```{r}
+nyts_data |>
+  group_by(year) |>
+  summarize("Cigarettes, Ever \n (any lifetime use)" = (mean(ECIGT, na.rm = TRUE) * 100),
+            "E-cigarettes, Ever \n (any lifetime use)" = (mean(EELCIGT, na.rm = TRUE) * 100),
+            "Cigarettes, Current \n (any past-30-day use)" = (mean(CCIGT, na.rm = TRUE) * 100),
+          "E-cigarettes, Current \n (any past-30-day use)" = (mean(CELCIGT, na.rm = TRUE) * 100)) |>
+  pivot_longer(cols = - year, 
+               names_to = "Category", 
+               values_to = "Percentage of students") |>
+  separate(Category, into = c("Product", "User"), sep = ", ") |>
+  head()
+```
+
+
+**From the visualizations above, we can conclude that the relationship between 'E-Cigarettes' (vaping) and other forms of tobacco is that of a zero sum.** There is a finite number of humans and a small subset of them are tobacco users. The total amount of tobacco users seems to decrease as vaping users increase. This may be due to the users of vapes switching from other forms of tobacco to vaping only. Furthermore, other forms of tobacco don't have as many different flavors. This is especially important as the subset of the smoking population is students who are more than likely to be attracted by the flavors vape tobacco offers. 
+
+
+
+### Question 5: Is there a difference in e-cigarette use between students living in different PSU (primary sampling units)? (Extension)
+
+Throughout this Case Study, we have focused on answering four questions that arise naturally based on the demographics represented by the dataset. We have also been tasked with extending our comprehension beyond the analysis found in the scope of this class. We personally believe the best way we can do this is to qualify the integrity of the dataset. To do this we believe that normalizing the data could provide weights that would give meaningful context to the data collected by the CDC. We can visualize the amount of unique data in the Primary Sampling Unit (PSU) utilized in the survey. The PSU of this survey is the county of the respondent students' school. We care about this due to the differing circumstances that students of each PSU live with. As the PSU correlates to the location of the student, each PSU carries a different weight due to the laws that govern that PSU. Thus it is important to see the unique amount of PSUs to ensure that we are getting a better representative dataset of our population (The US). The plot below provides a visualization of these unique PSUs:
+
+```{r}
+nyts_data |>
+  group_by(year, psu) |>
+  unique() |>
+  count() |>
+  ggplot(aes(x = year, y = n)) +
+  theme_linedraw() +
+  theme(plot.title.position = "plot") +
+  geom_col() +
+  labs(title = "Total unique counties represented by respondents from 2015 to 2019",
+       subtitle = "Unique Primary Standard Units by each year represented in the survey",
+       x = "Year",
+       y = "Unique PSU")  
+```
+
+After viewing the visualization above, we can see an increasing though fluctuating, amount of unique PSUs (though to be fair this is based on two data points). To form accurate conclusions, we need to be able to calculate precise confidence intervals for our visualizations and extrapolations to have meaningful value. 
+
+We continued our analysis to observe the sex distribution of unique PSUs. To observe this, we grouped the dataset by PSU and sex, then counted the number of observations for females and males, plotting them on a scatterplot. This way, we can observe the size of each unique PSU along with the sex breakdown. 
+
+```{r}
+nyts_data |>
+  group_by(psu, Sex) |>
+  unique() |>
+  count() |>
+  drop_na(Sex) |>
+  ggplot(aes(x = psu, y = n, color = Sex)) +
+  theme_linedraw() +
+  theme(plot.title.position = "plot") +
+  geom_point() +
+  labs(title = "Sex breakdown of PSUs",
+       subtitle = "Males and Females make up a comparable portion of unique PSUs",
+       x = "psu",
+       y = "Count per sex")  
+```
+  
+Looking at the scatterplot, we can observe that the size of each unique PSU varies greatly. As for sex proportions, it is relatively even, with no significant density of either sex. This tells us that the PSUs selected for the study are relatively comparable to observe further variables on. Building on the year distributions of unique PSUs, we can infer that the PSUs are comparable across the board for observing other variables. 
+
+
+We then look at e-cigarette use per PSU: 
+
+```{r}
+nyts_data |>
+  group_by(psu, ecig_ever) |>
+  unique() |>
+  count() |>
+  ggplot(aes(x = psu, y = n, color = ecig_ever)) +
+  theme_linedraw() +
+  theme(plot.title.position = "plot") +
+  geom_point() +
+  labs(title = "E-cigarette use by PSU",
+       subtitle = "Males and Females make up a comparable portion of unique PSUs",
+       x = "psu",
+       y = "E-cigarette use count") 
+```
+
+We can observe that there is a slightly larger spread of non "ever" e-cigarette users. There is no significant density of either in certain PSUs. 
+
+We then look at tobacco use per PSU: 
+
+```{r}
+nyts_data |>
+  group_by(psu, tobacco_ever) |>
+  unique() |>
+  count() |>
+  ggplot(aes(x = psu, y = n, color = tobacco_ever)) +
+  theme_linedraw() +
+  theme(plot.title.position = "plot") +
+  geom_point() +
+  labs(title = "E-cigarette use by PSU",
+       subtitle = "Males and Females make up a comparable portion of unique PSUs",
+       x = "psu",
+       y = "E-cigarette use count") 
+```
+
+The spread also looks pretty even, with a couple larger data points for use count of tobacco users. 
+
+**Along with the previous graph on e-cigarette use, we can observe that there is not a large difference in proprtion of tobacco or e-cigarette users between PSUs.** 
+
+## Discussion/Conclusion
+
+Throughout this Case Study, we have explored the dataset compiled from the Excel codebooks provided by the CDC's results of their non-longitudinal case study conducted on the tobacco habits of high school and middle school students in the United States (US). We have answered questions ranging from the type of tobacco used, to the most popular flavor used in the emerging tobacco delivery system called 'E-Cigarettes'. Through which we have seen that tobacco use has generally decreased from 2015 to 2017 and steadily increased from 2017 to 2019. Furthermore, tobacco usage seems to be especially prevalent among the respondents that answered as 'Male' in the survey. Furthermore, it seems that 'E-Cigarettes' (especially of the JUUL brand) have made a meteoric rise leading to a steady decline in the use of other forms of tobacco consumption. Looking at our extension for observing different variables across PSUs, we can infer that the PSUs are relatively comparable and allow us to carry further analysis on different variables between PSUs. 
+
+We believe our visualizations to offer an accurate, though morbid, prediction that 'E-Cigarettes' may give rise to tobacco consumption among students that may come close to the alarming levels that caused the CDC to create this survey program. There is a particular high amount of controversy surrounding the flavorings of 'E-Cigarettes' as they seem to be marketed towards a younger audience. The CDC website included in the beginning of this case study is a repository of the codebooks created from the results of the data collected in the annual survey. This repository is up to date as of 2022 and could be a great starting place to observe the effects the pandemic had on the tobacco consumption habits of students in the US.
+
